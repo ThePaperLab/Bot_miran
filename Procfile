@@ -1,0 +1,1 @@
+worker: python miran_poetic_image_bot_corrected.py
