@@ -50,20 +50,20 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await update.message.reply_text(
-        "Hai mandato un’immagine. Non male."
+        "Hai mandato un’immagine. Non male."/n
         "Ma non posso caricarla così, sai com’è."
-        "Prima deve passare il Giudizio dell’Occhio Terzo."
-        "Un essere umano — o qualcosa che gli somiglia — la guarderà, ci rifletterà, magari prenderà un caffè. "
-        "Poi deciderà se è degna del canale o se finirà tra i ricordi non pubblicati."
+        "Prima deve passare il Giudizio dell’Occhio Terzo."/n
+        "Un essere umano — o qualcosa che gli somiglia — la guarderà, ci rifletterà, magari prenderà un caffè. "/n
+        "Poi deciderà se è degna del canale o se finirà tra i ricordi non pubblicati."/n
         "Ti aggiorno appena si muove qualcosa nell’ombra della moderazione."
     )
 
 async def handle_other(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Interazione non conforme."
-        "Questo nodo accetta soltanto frammenti visivi."
-        "Altri segnali saranno ignorati."
-        "Se cerchi parole, storie o risposte, devi varcare un’altra soglia:"
+        "Interazione non conforme."/n
+        "Questo nodo accetta soltanto frammenti visivi."/n
+        "Altri segnali saranno ignorati."/n
+        "Se cerchi parole, storie o risposte, devi varcare un’altra soglia:"/n
         "→ https://chatgpt.com/g/g-67defc5af8f88191a4a3e593921b46be-miran-paper"
     )
 
@@ -93,12 +93,12 @@ async def handle_approval(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_caption("🚫 Pubblicazione annullata.")
         await context.bot.send_message(
             chat_id=user_id,
-            text="L’Occhio Terzo ha parlato."
-                 "L’immagine è stata trattenuta."
-                 "Non verrà pubblicata."
-                 "Motivo segnalato: incongruenza narrativa"
-                 "(ma potrebbe anche solo aver avuto una brutta giornata)."
-                 "Prova con un altro frammento. O aspetta che cambino i venti."
+            text="L’Occhio Terzo ha parlato."/n
+                 "L’immagine è stata trattenuta."/n
+                 "Non verrà pubblicata."/n
+                 "Motivo segnalato: incongruenza narrativa"/n
+                 "(ma potrebbe anche solo aver avuto una brutta giornata)."/n
+                 "Prova con un altro frammento. O aspetta che cambino i venti."/n
         )
 
 def main():
