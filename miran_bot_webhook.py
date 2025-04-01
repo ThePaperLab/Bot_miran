@@ -1,49 +1,54 @@
 import os
-import logging
-import asyncio
-from flask import Flask, request
-from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
+from flask import Flask, request, jsonify
+from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup, constants
 from telegram.ext import (
-    Application, CommandHandler, MessageHandler, CallbackQueryHandler,
-    ContextTypes, filters
+    ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 )
 from uuid import uuid4
-from threading import Thread
+import threading
+import asyncio
 
-# Logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-# Flask app
-app = Flask(__name__)
+# Flask App per ricevere storie
+flask_app = Flask(__name__)
 
-# Variabili d'ambiente
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
-ADMIN_ID = int(os.getenv("ADMIN_ID"))  # ID numerico dell'amministratore
+ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
-# Telegram bot
-bot = Bot(BOT_TOKEN)
+bot = Bot(token=BOT_TOKEN)
+PENDING_REQUESTS = {}
 
-# Event loop
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
+# === FLASK ROUTE per il GPTs ===
+@flask_app.route("/publish", methods=["POST"])
+def publish_story():
+    try:
+        data = request.get_json(force=True)
+        domanda = data.get("domanda", "")
+        risposta = data.get("risposta", "")
+        timestamp = data.get("timestamp", "")
 
-# Dizionario richieste in attesa
-pending_requests = {}
+        if not risposta:
+            return jsonify({"error": "Risposta mancante"}), 400
 
-@app.route("/")
-def index():
-    return "Miran Paper webhook attivo."
+        text = (
+            f"🌿 *Racconto dal GPTs di Miran Paper* 🌿\n\n"
+            f"*Domanda:* {domanda}\n\n"
+            f"*Risposta:* {risposta}\n\n"
+            f"_Timestamp:_ {timestamp}"
+        )
 
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    data = request.get_json()
-    update = Update.de_json(data, bot)
-    asyncio.run_coroutine_threadsafe(handle_update(update), loop)
-    return "", 200
+        asyncio.run(bot.send_message(chat_id=CHANNEL_ID, text=text, parse_mode=constants.ParseMode.MARKDOWN))
+        return jsonify({"status": "ok"}), 200
 
-# Handler telegram
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@flask_app.route("/", methods=["GET"])
+def health():
+    return "Webhook attivo per storie e immagini.", 200
+
+# === TELEGRAM BOT HANDLERS ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Benvenutə nel nodo visivo di Miran.\n"
@@ -52,20 +57,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info("📸 Ricevuta immagine")
     photo = update.message.photo[-1]
     file_id = photo.file_id
     user_id = update.message.from_user.id
     request_id = str(uuid4())
-    pending_requests[request_id] = (file_id, user_id)
+    PENDING_REQUESTS[request_id] = (file_id, user_id)
 
-    keyboard = [[
-        InlineKeyboardButton("✅ Pubblica", callback_data=f"approve|{request_id}"),
-        InlineKeyboardButton("❌ Rifiuta", callback_data=f"reject|{request_id}")
-    ]]
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Pubblica", callback_data=f"approve|{request_id}"),
+            InlineKeyboardButton("❌ Annulla", callback_data=f"reject|{request_id}")
+        ]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    await bot.send_photo(chat_id=ADMIN_ID, photo=file_id, caption="🖼️ Vuoi pubblicare questa immagine sul canale?", reply_markup=reply_markup)
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=file_id,
+        caption="🖼️ Vuoi pubblicare questa immagine sul canale?",
+        reply_markup=reply_markup
+    )
 
     await update.message.reply_text(
         "Hai mandato un’immagine. Non male.\n"
@@ -89,8 +100,8 @@ async def handle_approval(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     action, request_id = query.data.split("|")
+    data = PENDING_REQUESTS.pop(request_id, None)
 
-    data = pending_requests.pop(request_id, None)
     if not data:
         await query.edit_message_caption("❌ Richiesta non valida o già gestita.")
         return
@@ -98,40 +109,40 @@ async def handle_approval(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file_id, user_id = data
 
     if action == "approve":
-        await bot.send_photo(chat_id=CHANNEL_ID, photo=file_id)
+        await context.bot.send_photo(chat_id=CHANNEL_ID, photo=file_id)
         await query.edit_message_caption("✅ Immagine pubblicata.")
-        await bot.send_message(chat_id=user_id, text=(
-            "Il Custode ha vagliato. L’immagine è passata.\n"
-            "È stata pubblicata nel flusso visivo collettivo.\n"
-            "Canale: https://t.me/MiranPaper\n"
-            "Un’altra tessera si aggiunge al mosaico."
-        ))
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="Il Custode ha vagliato. L’immagine è passata.\n"
+                 "È stata pubblicata nel flusso visivo collettivo.\n"
+                 "Canale: https://t.me/MiranPaper\n"
+                 "Un’altra tessera si aggiunge al mosaico."
+        )
     else:
         await query.edit_message_caption("🚫 Pubblicazione annullata.")
-        await bot.send_message(chat_id=user_id, text=(
-            "L’Occhio Terzo ha parlato.\n"
-            "L’immagine è stata trattenuta.\n"
-            "Non verrà pubblicata.\n"
-            "Motivo segnalato: incongruenza narrativa\n"
-            "(ma potrebbe anche solo aver avuto una brutta giornata).\n"
-            "Prova con un altro frammento. O aspetta che cambino i venti."
-        ))
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="L’Occhio Terzo ha parlato.\n"
+                 "L’immagine è stata trattenuta.\n"
+                 "Non verrà pubblicata.\n"
+                 "Motivo segnalato: incongruenza narrativa\n"
+                 "(ma potrebbe anche solo aver avuto una brutta giornata).\n"
+                 "Prova con un altro frammento. O aspetta che cambino i venti."
+        )
 
-# Application e dispatcher
-application = Application.builder().token(BOT_TOKEN).build()
-application.add_handler(CommandHandler("start", start))
-application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-application.add_handler(MessageHandler(~filters.PHOTO, handle_other))
-application.add_handler(CallbackQueryHandler(handle_approval))
+# Avvio multiplo: Flask + Bot
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    flask_app.run(host="0.0.0.0", port=port)
 
-async def handle_update(update: Update):
-    await application.process_update(update)
+def run_telegram():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(MessageHandler(~filters.PHOTO, handle_other))
+    app.add_handler(CallbackQueryHandler(handle_approval))
+    app.run_polling()
 
 if __name__ == "__main__":
-    def run_loop():
-        loop.run_forever()
-
-    t = Thread(target=run_loop, daemon=True)
-    t.start()
-
-    app.run(host="0.0.0.0", port=10000, debug=True)
+    threading.Thread(target=run_flask).start()
+    run_telegram()
