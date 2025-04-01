@@ -1,4 +1,3 @@
-
 import os
 import logging
 from flask import Flask, request
@@ -102,7 +101,6 @@ async def handle_approval(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     action, request_id = query.data.split("|")
-
     data = pending_requests.pop(request_id, None)
     if not data:
         await query.edit_message_caption("❌ Richiesta non valida o già gestita.")
@@ -130,7 +128,7 @@ async def handle_approval(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Prova con un altro frammento. O aspetta che cambino i venti."
         ))
 
-# Application e dispatcher
+# Application
 application = Application.builder().token(BOT_TOKEN).build()
 application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
@@ -146,4 +144,5 @@ if __name__ == "__main__":
 
     t = Thread(target=run_loop, daemon=True)
     t.start()
+
     app.run(host="0.0.0.0", port=10000, debug=True)
