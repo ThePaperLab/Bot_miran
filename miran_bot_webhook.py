@@ -1,9 +1,12 @@
 import os
 import logging
+import asyncio
 from flask import Flask, request
 from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
-import asyncio
+from telegram.ext import (
+    Application, CommandHandler, MessageHandler, CallbackQueryHandler,
+    ContextTypes, filters
+)
 from uuid import uuid4
 from threading import Thread
 
@@ -32,21 +35,6 @@ pending_requests = {}
 @app.route("/")
 def index():
     return "Miran Paper webhook attivo."
-
-@app.route("/publish", methods=["POST"])
-def publish():
-    data = request.get_json()
-    risposta = data.get("risposta", "").strip()
-    if risposta:
-        asyncio.run_coroutine_threadsafe(
-            bot.send_message(chat_id=CHANNEL_ID, text="Una nuova tessera narrativa"),
-            loop
-        )
-        asyncio.run_coroutine_threadsafe(
-            bot.send_message(chat_id=CHANNEL_ID, text=risposta),
-            loop
-        )
-    return "", 200
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -101,6 +89,7 @@ async def handle_approval(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     action, request_id = query.data.split("|")
+
     data = pending_requests.pop(request_id, None)
     if not data:
         await query.edit_message_caption("❌ Richiesta non valida o già gestita.")
@@ -128,7 +117,7 @@ async def handle_approval(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Prova con un altro frammento. O aspetta che cambino i venti."
         ))
 
-# Application
+# Application e dispatcher
 application = Application.builder().token(BOT_TOKEN).build()
 application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
